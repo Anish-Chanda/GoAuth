@@ -29,5 +29,5 @@ Transparency is at the heart of our open-source commitment. Being open-source go
 
 GoAuth is designed to grow with your project, adapting to changing requirements and scaling as your needs expand. Whether you're just getting started or dealing with complex user management, GoAuth is built to evolve alongside your application, offering the flexibility to meet both current and future demands.
 
-Here is the link to the innitial discussion on reddit
+Here is the link to the innitial discussion on [reddit](https://www.reddit.com/r/golang/comments/1gadf0h/discussion_developing_an_opensource_go/)
 
