@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/anish-chanda/goauth/config"
-	"github.com/anish-chanda/goauth/internal/db"
+	"github.com/anish-chanda/goauth/db"
 	"github.com/anish-chanda/goauth/internal/models"
 )
 
@@ -28,6 +28,18 @@ const (
 type AuthService struct {
 	Config *config.Config
 	Db     db.Database
+}
+
+func NewAuthService(c *config.Config, db db.Database) (*AuthService, error) {
+	service := &AuthService{
+		Config: c,
+		Db:     db,
+	}
+
+	if err := service.runMigrations(); err != nil {
+        return nil, err
+    }
+	return service, nil
 }
 
 func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {

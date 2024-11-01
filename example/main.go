@@ -3,15 +3,26 @@ package main
 import (
 	"log"
 	"net/http"
+	"database/sql"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/anish-chanda/goauth/auths"
 	"github.com/anish-chanda/goauth/config"
+	sqlite3 "github.com/anish-chanda/goauth/db/sqlite3"
 )
 
 func main() {
-	authService := &auths.AuthService{
-		Config: config.DefaultConfig(),
+	db, err := sql.Open("sqlite3", "./test.db")
+	if err != nil {
+		log.Fatalf("could not open db: %v\n", err)
 	}
+
+	authService, err := auths.NewAuthService(config.DefaultConfig(), sqlite3.NewSQLite3DB(db))
+	if err != nil {
+		log.Fatalf("could not create auth service: %v\n", err)
+	}
+
 
 	http.HandleFunc("/signup", authService.EmailSignup)
 

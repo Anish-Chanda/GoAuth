@@ -7,6 +7,8 @@ require (
 	golang.org/x/crypto v0.28.0
 )
 
+require github.com/mattn/go-sqlite3 v1.14.24
+
 require (
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	golang.org/x/sys v0.26.0 // indirect
