@@ -2,8 +2,9 @@ package config
 
 type Config struct {
 	JWTSecret       string
-	AccessTokenTTL  int // in minutes
-	RefreshTokenTTL int // in minutes
+	AccessTokenTTL  int    // in minutes
+	RefreshTokenTTL int    // in minutes
+	DbType          string // Database identifier, Supported values: sqlite3
 	DB              DatabaseConfig
 	PasswordConfig  PasswordConfig
 }

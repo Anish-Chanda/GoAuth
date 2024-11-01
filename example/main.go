@@ -1,13 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
-	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/anish-chanda/goauth/auths"
+	auths "github.com/anish-chanda/goauth/authS"
 	"github.com/anish-chanda/goauth/config"
 	sqlite3 "github.com/anish-chanda/goauth/db/sqlite3"
 )
@@ -22,7 +22,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not create auth service: %v\n", err)
 	}
-
 
 	http.HandleFunc("/signup", authService.EmailSignup)
 

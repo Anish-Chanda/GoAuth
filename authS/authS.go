@@ -37,13 +37,13 @@ func NewAuthService(c *config.Config, db db.Database) (*AuthService, error) {
 	}
 
 	if err := service.runMigrations(); err != nil {
-        return nil, err
-    }
+		return nil, err
+	}
 	return service, nil
 }
 
 func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
-	// ctx := r.Context()
+	ctx := r.Context()
 	// extract and validate req body
 	var req models.EmailSignupRequest
 
@@ -64,17 +64,16 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: check if email already exists
-	// existingUser, err := s.Db.GetUserByEmail(ctx, req.Email)
-	// if err != nil {
-	// 	// TODO: log
-	// 	http.Error(w, "something went wrong", http.StatusInternalServerError)
-	// 	return
-	// }
-	// if existingUser != nil {
-	// 	http.Error(w, EmailExists, http.StatusBadRequest)
-	// 	return
-	// }
+	// check if email already exists
+	isEmailused, err := s.Db.CheckIfEmailExists(ctx, req.Email)
+	if err != nil {
+		http.Error(w, "could not check if email exists", http.StatusInternalServerError)
+		return
+	}
+	if isEmailused {
+		http.Error(w, EmailExists, http.StatusConflict)
+		return
+	}
 
 	// generate salt
 	salt := make([]byte, s.Config.PasswordConfig.HashSaltLength)
@@ -95,29 +94,54 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: Create user
-	user := &models.User{
-		User_id:    generateID(), // TODO: optional pass form configs
-		Email:      req.Email,
-		PassHash:   string(hash),
-		Salt:       string(salt),
-		AuthMethod: EmailPass,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
-	}
-
-	// TODO: add user to db
-
+	user_id := generateID()
+	now := time.Now()
 	//genearte tokens
-	accessToken, err := s.generateAccessToken(s.Config, user.User_id)
+	accessToken, err := s.generateAccessToken(s.Config, user_id, now)
 	if err != nil {
 		http.Error(w, "could not generate access token", http.StatusInternalServerError)
 		return
 	}
 
-	refreshToken, err := s.generateRefreshToken(s.Config, user.User_id)
+	// TODO: configure refresh token usage from confgis
+	refreshToken, err := s.generateRefreshToken(s.Config, user_id, now)
 	if err != nil {
 		http.Error(w, "could not generate refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Create user
+	user := &models.User{
+		Id:              user_id, // TODO: optional pass id gen form configs
+		Email:           req.Email,
+		AuthMethod:      EmailPass,
+		IsEmailVerified: false,
+		IsActive:        true, // TODO: let this be configurable
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		PasswordCreds: &models.PasswordCreds{
+			CredentialID: generateID(),
+			UserID:       user_id,
+			PasswordHash: string(hash),
+			PasswordSalt: string(salt),
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		},
+		RefreshTokens: &models.RefreshToken{
+			TokenID:   generateID(),
+			UserID:    user_id,
+			Token:     refreshToken,
+			Revoked:   false,
+			CreatedAt: now,
+			ExpiresAt: now.Add(time.Duration(s.Config.RefreshTokenTTL)),
+			LastUsed:  now, // TODO: should this be now?
+		},
+	}
+
+	// add user to db
+	err = s.Db.CreateEmailPassUserWithRefresh(ctx, user)
+	if err != nil {
+		http.Error(w, "could not create user", http.StatusInternalServerError)
 		return
 	}
 
@@ -128,5 +152,6 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }

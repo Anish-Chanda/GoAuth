@@ -8,15 +8,20 @@ import (
 )
 
 type Database interface {
-	CreateUser(ctx context.Context, user *models.User) error
-	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
-	Exec(ctx context.Context, query string) error
+	// Read functions
+	CheckIfEmailExists(ctx context.Context, email string) (bool, error)
 	GetSchemaVersion(ctx context.Context) (int, error)
+
+	// Write functions
+	CreateEmailPassUserWithRefresh(ctx context.Context, user *models.User) error // creates a transaction (if supported) and stroes user, password creds and refresh token. sorry for the long name lol
+
+	Exec(ctx context.Context, query string) error
+	Close()
 }
 
-func EnsureSchemaVersionTable( db *Database) error {
+func EnsureSchemaVersionTable(db *Database) error {
 	fmt.Println("ensuring schema version table")
-	
+
 	query := `
 		CREATE TABLE IF NOT EXISTS schema_version (
 			version INTEGER PRIMARY KEY
