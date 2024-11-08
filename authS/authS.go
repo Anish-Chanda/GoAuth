@@ -9,6 +9,7 @@ import (
 	"github.com/anish-chanda/goauth/config"
 	"github.com/anish-chanda/goauth/db"
 	"github.com/anish-chanda/goauth/internal/models"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // error messages
@@ -95,7 +96,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user_id := generateID()
-	now := time.Now()
+	now := time.Now().UTC()
 	//genearte tokens
 	accessToken, err := s.generateAccessToken(s.Config, user_id, now)
 	if err != nil {
@@ -104,7 +105,8 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: configure refresh token usage from confgis
-	refreshToken, err := s.generateRefreshToken(s.Config, user_id, now)
+	refreshId := generateID()
+	refreshToken, err := s.generateRefreshToken(s.Config, user_id, now, refreshId)
 	if err != nil {
 		http.Error(w, "could not generate refresh token", http.StatusInternalServerError)
 		return
@@ -128,12 +130,12 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:    now,
 		},
 		RefreshTokens: &models.RefreshToken{
-			TokenID:   generateID(),
+			TokenID:   refreshId,
 			UserID:    user_id,
 			Token:     refreshToken,
 			Revoked:   false,
 			CreatedAt: now,
-			ExpiresAt: now.Add(time.Duration(s.Config.RefreshTokenTTL)),
+			ExpiresAt: now.Add(time.Duration(s.Config.RefreshTokenTTL) * time.Minute),
 			LastUsed:  now, // TODO: should this be now?
 		},
 	}
@@ -153,5 +155,46 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+	// parse refresh token
+	var req models.RefreshRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, InvalidReqBody, http.StatusBadRequest)
+		return
+	}
+
+	//verify refresh token
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(req.RefreshToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.Config.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	//check if token was revoked
+	revoked, err := s.Db.IsRefreshTokenRevoked(claims.ID)
+	if err != nil || revoked || claims.ExpiresAt.Time.Before(time.Now().UTC()) {
+		http.Error(w, "Refresh token is invalid or expired", http.StatusUnauthorized)
+		return
+	}
+
+	//generate new access token
+	accessTok, err := s.generateAccessToken(s.Config, claims.Subject, time.Now().UTC())
+	if err != nil {
+		http.Error(w, "could not generate access token", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the new tokens to the client
+	response := map[string]string{
+		"access_token": accessTok,
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }

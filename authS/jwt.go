@@ -23,13 +23,14 @@ func (s *AuthService) generateAccessToken(c *config.Config, userId string, t tim
 	return token.SignedString([]byte(c.JWTSecret))
 }
 
-func (s *AuthService) generateRefreshToken(c *config.Config, userId string, t time.Time) (string, error) {
-
+func (s *AuthService) generateRefreshToken(c *config.Config, userId string, now time.Time, refreshId string) (string, error) {
+	refreshDuration := time.Duration(s.Config.RefreshTokenTTL) * time.Minute
 	claims := jwt.RegisteredClaims{
+		ID:        refreshId,
 		Issuer:    "goauth",
 		Subject:   userId,
-		IssuedAt:  jwt.NewNumericDate(t),
-		ExpiresAt: jwt.NewNumericDate(t.Add(time.Duration(c.RefreshTokenTTL) * time.Minute)), // Expiry based on Config.RefreshTokenTTL
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(now.Add(refreshDuration)), // Expiry based on Config.RefreshTokenTTL
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(c.JWTSecret))

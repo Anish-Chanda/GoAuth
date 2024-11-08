@@ -122,6 +122,17 @@ func (s *SQLite3DB) CreateEmailPassUserWithRefresh(ctx context.Context, user *mo
 	return tx.Commit()
 }
 
+func (s *SQLite3DB) IsRefreshTokenRevoked(id string) (bool, error) {
+	var revoked bool
+	row := s.Conn.QueryRow(`SELECT revoked FROM Refresh_Tokens WHERE token_id = ? LIMIT 1`, id)
+	err := row.Scan(&revoked)
+
+	if err != nil {
+		return false, fmt.Errorf("could not check if refresh token is revoked: %w", err)
+	}
+	return revoked, nil
+}
+
 func (s *SQLite3DB) Close() {
 	s.Conn.Close()
 }
