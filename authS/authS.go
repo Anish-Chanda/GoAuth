@@ -3,13 +3,13 @@ package auths
 import (
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/anish-chanda/goauth/config"
 	"github.com/anish-chanda/goauth/db"
 	"github.com/anish-chanda/goauth/internal/models"
+	"github.com/anish-chanda/goauth/internal/utils"
 	"github.com/golang-jwt/jwt/v4"
 )
 
@@ -21,6 +21,7 @@ const (
 	EmailExists        = "email already exists"
 	MissingFields      = "missing required fields"
 	InvalidAuthMethod  = "invalid auth method"
+	SomethingWentWrong = "something went wrong"
 )
 
 // Auth Methds
@@ -33,6 +34,7 @@ type AuthService struct {
 	Db     db.Database
 }
 
+/* Creates a new AuthService with the given Config and Database conn */
 func NewAuthService(c *config.Config, db db.Database) (*AuthService, error) {
 	service := &AuthService{
 		Config: c,
@@ -45,6 +47,7 @@ func NewAuthService(c *config.Config, db db.Database) (*AuthService, error) {
 	return service, nil
 }
 
+/* Handles the signup request for email-password users */
 func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// extract and validate req body
@@ -62,7 +65,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// validate email and pass according to config
-	if err := validateEmailAndPassword(s.Config, req.Email, req.Password); err != nil {
+	if err := utils.ValidateEmailAndPassword(s.Config, req.Email, req.Password); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -86,7 +89,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//hash password
-	hasher, err := CreateHasher(&s.Config.PasswordConfig)
+	hasher, err := utils.CreateHasher(&s.Config.PasswordConfig)
 	if err != nil {
 		http.Error(w, "could not hash password", http.StatusInternalServerError)
 		return
@@ -97,18 +100,18 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user_id := generateID()
+	user_id := utils.GenerateID()
 	now := time.Now().UTC()
 	//genearte tokens
-	accessToken, err := s.generateAccessToken(s.Config, user_id, now)
+	accessToken, err := utils.GenerateAccessToken(s.Config, user_id, now)
 	if err != nil {
 		http.Error(w, "could not generate access token", http.StatusInternalServerError)
 		return
 	}
 
 	// TODO: configure refresh token usage from confgis
-	refreshId := generateID()
-	refreshToken, err := s.generateRefreshToken(user_id, now, refreshId)
+	refreshId := utils.GenerateID()
+	refreshToken, err := utils.GenerateRefreshToken(s.Config, user_id, now, refreshId)
 	if err != nil {
 		http.Error(w, "could not generate refresh token", http.StatusInternalServerError)
 		return
@@ -124,7 +127,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:       now,
 		UpdatedAt:       now,
 		PasswordCreds: &models.PasswordCreds{
-			CredentialID: generateID(),
+			CredentialID: utils.GenerateID(),
 			UserID:       user_id,
 			PasswordHash: string(hash),
 			PasswordSalt: string(salt),
@@ -138,7 +141,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 			Revoked:   false,
 			CreatedAt: now,
 			ExpiresAt: now.Add(time.Duration(s.Config.RefreshTokenTTL) * time.Minute),
-			LastUsed:  now, // TODO: should this be now?
+			LastUsed:  now,
 		},
 	}
 
@@ -186,10 +189,17 @@ func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//generate new access token
-	accessTok, err := s.generateAccessToken(s.Config, claims.Subject, time.Now().UTC())
+	// update last used timestamp of the refresh token
+	err = s.Db.UpdateRefreshTokLastUsed(r.Context(), claims.ID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, "could not generate access token", http.StatusInternalServerError)
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
+		return
+	}
+
+	//generate new access token
+	accessTok, err := utils.GenerateAccessToken(s.Config, claims.Subject, time.Now().UTC())
+	if err != nil {
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
 		return
 	}
 
@@ -201,7 +211,7 @@ func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// LoginRequest represents the expected login request body
+/* Handles the login request for email-password users */
 func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -218,8 +228,6 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("Hereeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-
 	// Get user from database
 	user, err := s.Db.GetPassUserByEmail(ctx, req.Email)
 	if err != nil {
@@ -235,9 +243,9 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify password
-	hasher, err := CreateHasher(&s.Config.PasswordConfig)
+	hasher, err := utils.CreateHasher(&s.Config.PasswordConfig)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
 		return
 	}
 
@@ -252,16 +260,16 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Generate tokens
 	now := time.Now().UTC()
-	accessToken, err := s.generateAccessToken(s.Config, user.Id, now)
+	accessToken, err := utils.GenerateAccessToken(s.Config, user.Id, now)
 	if err != nil {
-		http.Error(w, "Could not generate access token", http.StatusInternalServerError)
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
 		return
 	}
 
-	refreshId := generateID()
-	refreshToken, err := s.generateRefreshToken(user.Id, now, refreshId)
+	refreshId := utils.GenerateID()
+	refreshToken, err := utils.GenerateRefreshToken(s.Config, user.Id, now, refreshId)
 	if err != nil {
-		http.Error(w, "Could not generate refresh token", http.StatusInternalServerError)
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
 		return
 	}
 
@@ -276,7 +284,7 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		LastUsed:  now,
 	})
 	if err != nil {
-		http.Error(w, "Could not store refresh token", http.StatusInternalServerError)
+		http.Error(w, SomethingWentWrong, http.StatusInternalServerError)
 		return
 	}
 
@@ -286,6 +294,5 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		"refresh_token": refreshToken,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Write(w)
 	json.NewEncoder(w).Encode(response)
 }

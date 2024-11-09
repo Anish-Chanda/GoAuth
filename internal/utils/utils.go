@@ -1,4 +1,4 @@
-package auths
+package utils
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func validateEmailAndPassword(c *config.Config, email, password string) error {
+func ValidateEmailAndPassword(c *config.Config, email, password string) error {
 	// TODO: validate email
 
 	if len(password) < c.PasswordConfig.MinLength {
@@ -19,6 +19,6 @@ func validateEmailAndPassword(c *config.Config, email, password string) error {
 	return nil
 }
 
-func generateID() string {
+func GenerateID() string {
 	return uuid.New().String()
 }

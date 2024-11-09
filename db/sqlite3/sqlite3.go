@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/anish-chanda/goauth/db"
 	"github.com/anish-chanda/goauth/internal/models"
@@ -182,6 +183,14 @@ func (s *SQLite3DB) StoreRefreshToken(ctx context.Context, token models.RefreshT
 	`, token.TokenID, token.UserID, token.Token, token.Revoked, token.CreatedAt, token.ExpiresAt, token.LastUsed)
 	if err != nil {
 		return fmt.Errorf("could not store refresh token: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLite3DB) UpdateRefreshTokLastUsed(ctx context.Context, id string, now time.Time) error {
+	_, err := s.Conn.ExecContext(ctx, `UPDATE Refresh_Tokens SET last_used = ? WHERE token_id = ?`, now, id)
+	if err != nil {
+		return fmt.Errorf("could not update refresh token last used: %w", err)
 	}
 	return nil
 }

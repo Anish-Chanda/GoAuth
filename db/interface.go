@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/anish-chanda/goauth/internal/models"
 )
@@ -18,6 +19,8 @@ type Database interface {
 	// Write functions
 	CreateEmailPassUserWithRefresh(ctx context.Context, user *models.User) error // creates a transaction (if supported) and stroes user, password creds and refresh token. sorry for the long name lol
 
+	/* Updates the last used time of a given token id */
+	UpdateRefreshTokLastUsed(ctx context.Context, id string, now time.Time) error
 	/* */
 	StoreRefreshToken(context.Context, models.RefreshToken) error
 
