@@ -23,7 +23,7 @@ func (s *AuthService) generateAccessToken(c *config.Config, userId string, t tim
 	return token.SignedString([]byte(c.JWTSecret))
 }
 
-func (s *AuthService) generateRefreshToken(c *config.Config, userId string, now time.Time, refreshId string) (string, error) {
+func (s *AuthService) generateRefreshToken(userId string, now time.Time, refreshId string) (string, error) {
 	refreshDuration := time.Duration(s.Config.RefreshTokenTTL) * time.Minute
 	claims := jwt.RegisteredClaims{
 		ID:        refreshId,
@@ -33,5 +33,5 @@ func (s *AuthService) generateRefreshToken(c *config.Config, userId string, now 
 		ExpiresAt: jwt.NewNumericDate(now.Add(refreshDuration)), // Expiry based on Config.RefreshTokenTTL
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(c.JWTSecret))
+	return token.SignedString([]byte(s.Config.JWTSecret))
 }

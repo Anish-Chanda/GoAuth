@@ -12,9 +12,14 @@ type Database interface {
 	CheckIfEmailExists(ctx context.Context, email string) (bool, error)
 	GetSchemaVersion(ctx context.Context) (int, error)
 	IsRefreshTokenRevoked(id string) (bool, error)
+	/* Returns a user with the email along with password credentials (No other data is returned) */
+	GetPassUserByEmail(ctx context.Context, email string) (models.User, error)
 
 	// Write functions
 	CreateEmailPassUserWithRefresh(ctx context.Context, user *models.User) error // creates a transaction (if supported) and stroes user, password creds and refresh token. sorry for the long name lol
+
+	/* */
+	StoreRefreshToken(context.Context, models.RefreshToken) error
 
 	Exec(ctx context.Context, query string) error
 	Close()

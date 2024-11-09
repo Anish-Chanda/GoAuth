@@ -133,6 +133,59 @@ func (s *SQLite3DB) IsRefreshTokenRevoked(id string) (bool, error) {
 	return revoked, nil
 }
 
+func (s *SQLite3DB) GetPassUserByEmail(ctx context.Context, email string) (models.User, error) {
+	var user models.User
+	row := s.Conn.QueryRowContext(ctx, `SELECT * FROM Users WHERE email = ? LIMIT 1`, email)
+	err := row.Scan(
+		&user.Id,
+		&user.Email,
+		&user.AuthMethod,
+		&user.IsEmailVerified,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return models.User{}, fmt.Errorf("could not get user by email: %w", err)
+	}
+
+	user.PasswordCreds = &models.PasswordCreds{}
+
+	// Get password cred
+	credsRow := s.Conn.QueryRowContext(ctx, `SELECT * FROM Password_Creds WHERE user_id = ? LIMIT 1`, user.Id)
+	err = credsRow.Scan(
+		&user.PasswordCreds.CredentialID,
+		&user.PasswordCreds.UserID,
+		&user.PasswordCreds.PasswordHash,
+		&user.PasswordCreds.PasswordSalt,
+		&user.PasswordCreds.CreatedAt,
+		&user.PasswordCreds.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return models.User{}, fmt.Errorf("no password creds found for user id: %s", user.Id)
+		}
+		return models.User{}, fmt.Errorf("could not get password creds: %w", err)
+
+	}
+
+	return user, nil
+}
+
+func (s *SQLite3DB) StoreRefreshToken(ctx context.Context, token models.RefreshToken) error {
+	_, err := s.Conn.ExecContext(ctx, `
+		INSERT INTO Refresh_Tokens (
+			token_id, user_id, token, revoked,
+			created_at, expires_at, last_used
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, token.TokenID, token.UserID, token.Token, token.Revoked, token.CreatedAt, token.ExpiresAt, token.LastUsed)
+	if err != nil {
+		return fmt.Errorf("could not store refresh token: %w", err)
+	}
+	return nil
+}
+
 func (s *SQLite3DB) Close() {
 	s.Conn.Close()
 }

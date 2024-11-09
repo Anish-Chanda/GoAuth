@@ -3,6 +3,7 @@ package auths
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -19,6 +20,7 @@ const (
 	ErrInvalidPassword = "invalid password"
 	EmailExists        = "email already exists"
 	MissingFields      = "missing required fields"
+	InvalidAuthMethod  = "invalid auth method"
 )
 
 // Auth Methds
@@ -106,7 +108,7 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: configure refresh token usage from confgis
 	refreshId := generateID()
-	refreshToken, err := s.generateRefreshToken(s.Config, user_id, now, refreshId)
+	refreshToken, err := s.generateRefreshToken(user_id, now, refreshId)
 	if err != nil {
 		http.Error(w, "could not generate refresh token", http.StatusInternalServerError)
 		return
@@ -196,5 +198,94 @@ func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		"access_token": accessTok,
 	}
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// LoginRequest represents the expected login request body
+func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse request body
+	var req models.EmailSignupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, InvalidReqBody, http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Email == "" || req.Password == "" {
+		http.Error(w, MissingFields, http.StatusBadRequest)
+		return
+	}
+
+	fmt.Println("Hereeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+
+	// Get user from database
+	user, err := s.Db.GetPassUserByEmail(ctx, req.Email)
+	if err != nil {
+		// generic error message to avoid leaking info
+		http.Error(w, InvalidCredentials, http.StatusUnauthorized)
+		return
+	}
+
+	//verify auth method
+	if user.AuthMethod != EmailPass {
+		http.Error(w, InvalidAuthMethod, http.StatusUnauthorized)
+		return
+	}
+
+	// Verify password
+	hasher, err := CreateHasher(&s.Config.PasswordConfig)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !hasher.VerifyPassword(
+		[]byte(req.Password),
+		[]byte(user.PasswordCreds.PasswordHash),
+		[]byte(user.PasswordCreds.PasswordSalt),
+	) {
+		http.Error(w, InvalidCredentials, http.StatusUnauthorized)
+		return
+	}
+
+	// Generate tokens
+	now := time.Now().UTC()
+	accessToken, err := s.generateAccessToken(s.Config, user.Id, now)
+	if err != nil {
+		http.Error(w, "Could not generate access token", http.StatusInternalServerError)
+		return
+	}
+
+	refreshId := generateID()
+	refreshToken, err := s.generateRefreshToken(user.Id, now, refreshId)
+	if err != nil {
+		http.Error(w, "Could not generate refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Store refresh token
+	err = s.Db.StoreRefreshToken(ctx, models.RefreshToken{
+		TokenID:   refreshId,
+		UserID:    user.Id,
+		Token:     refreshToken,
+		Revoked:   false,
+		CreatedAt: now,
+		ExpiresAt: now.Add(time.Duration(s.Config.RefreshTokenTTL) * time.Minute),
+		LastUsed:  now,
+	})
+	if err != nil {
+		http.Error(w, "Could not store refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Return tokens
+	response := map[string]string{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Write(w)
 	json.NewEncoder(w).Encode(response)
 }
