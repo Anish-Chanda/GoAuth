@@ -55,7 +55,16 @@ func (s *SQLite3DB) CreateEmailPassUserWithRefresh(ctx context.Context, user *mo
 	if err != nil {
 		return fmt.Errorf("could not begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if p := recover(); p != nil {
+			// Handle panic by rolling back the transaction
+			_ = tx.Rollback()
+			panic(p) // Re-panic after rollback
+		} else if err != nil {
+			// Rollback only if an error occurred
+			_ = tx.Rollback()
+		}
+	}()
 
 	// Insert user
 	userQuery := `

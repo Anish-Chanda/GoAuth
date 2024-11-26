@@ -161,7 +161,10 @@ func (s *AuthService) EmailSignup(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +212,10 @@ func (s *AuthService) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		"access_token": accessTok,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err = json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 /* Handles the login request for email-password users */
@@ -295,5 +301,8 @@ func (s *AuthService) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		"refresh_token": refreshToken,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err = json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
