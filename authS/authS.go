@@ -10,6 +10,7 @@ import (
 	"github.com/anish-chanda/goauth/db"
 	"github.com/anish-chanda/goauth/internal/models"
 	"github.com/anish-chanda/goauth/internal/utils"
+	"github.com/anish-chanda/goauth/migrations"
 	"github.com/golang-jwt/jwt/v4"
 )
 
@@ -41,7 +42,7 @@ func NewAuthService(c *config.Config, db db.Database) (*AuthService, error) {
 		Db:     db,
 	}
 
-	if err := service.runMigrations(); err != nil {
+	if err := migrations.RunMigrations(service.Db); err != nil {
 		return nil, err
 	}
 	return service, nil
