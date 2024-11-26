@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS Refresh_Tokens;
+DROP TABLE IF EXISTS Password_Creds;
+DROP TABLE IF EXISTS Users;
