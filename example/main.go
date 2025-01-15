@@ -18,7 +18,9 @@ func main() {
 		log.Fatalf("could not open db: %v\n", err)
 	}
 
-	authService, err := auths.NewAuthService(config.DefaultConfig(), sqlite3.NewSQLite3DB(db))
+	goAuthConfig := config.DefaultConfig()
+	goAuthConfig.JWTSecret = "test_jwt_secret"
+	authService, err := auths.NewAuthService(goAuthConfig, sqlite3.NewSQLite3DB(db))
 	if err != nil {
 		log.Fatalf("could not create auth service: %v\n", err)
 	}
