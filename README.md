@@ -1,7 +1,7 @@
 # GoAuth
 Welcome to the GoAuth project! 🚀 This open-source authentication package for Go aims to provide a flexible, developer-friendly authentication solution that doesn't rely on third-party services, giving you full control over your user data. Although there's no working version yet, here’s what you can expect from the project and how you can get involved.
 
-> 🚧 The project is still in development, and there's no working version yet, but we would love your input as we build it! You can watch the repository to stay updated, fork it to experiment, or open issues for discussions.
+> 🚧 The project is still in development (Look at the dev branch for latest code), and there's no working version yet, but we would love your input as we build it! You can watch the repository to stay updated, fork it to experiment, or open issues for discussions.
 
 ## 🚀 Features (Planned)
 - **Auth Methods**: Support for email/password, OAuth2, 2FA, phone, magic links, etc. Also, have password reset and account recovery flows, which are customizable.
